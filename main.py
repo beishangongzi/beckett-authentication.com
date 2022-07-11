@@ -43,12 +43,18 @@ def begin(driver, number):
                 img.screenshot(os.path.join("captcha", f"{multiprocessing.current_process().pid}.png"))
             except:
                 try:
+                    if driver.find_element(by=By.XPATH, value=config.NO_RECORD).text == config.NO_RECORD_TEXT:
+                        print("No Record Found")
+                        return 1
                     time.sleep(1)  # 这个时间很玄学，但是并不是每次都会使用他，只有有时候会用到，不用动。
                     print("验证是否跳转")
                     driver.find_element(by=By.XPATH, value=config.TRUE_NUMBER)
                     break
                 except:
                     try:
+                        if driver.find_element(by=By.XPATH, value=config.NO_RECORD).text == config.NO_RECORD_TEXT:
+                            print("No Record Found")
+                            return 1
                         time.sleep(0.5)  # 这个时间很玄学，但是并不是每次都会使用他，只有有时候会用到，不用动。
                         print("验证是否跳转第二次")
                         driver.find_element(by=By.XPATH, value=config.TRUE_NUMBER)
@@ -64,6 +70,7 @@ def begin(driver, number):
         verify = driver.find_element(by=By.CSS_SELECTOR, value="#search")
         verify.click()
         time.sleep(2)  # 识别成功后，进行跳转，可能需要两秒，自己调整， 这里是最影响时间的:
+
         try:
             try:
                 driver.find_element(by=By.XPATH, value=config.TRUE_NUMBER)
@@ -78,6 +85,9 @@ def begin(driver, number):
                     driver.find_element(by=By.XPATH, value=config.TRUE_NUMBER)
             break
         except:
+            if driver.find_element(by=By.XPATH, value=config.NO_RECORD).text == config.NO_RECORD_TEXT:
+                print("No Record Found")
+                return 1
             print("验证码错误，重新填写")
 
 
@@ -92,6 +102,10 @@ def get_information(driver: webdriver.Firefox, query_number):
     true_number = driver.find_element(by=By.XPATH, value=config.TRUE_NUMBER).text.split(":")[-1].strip()
     # item_name = driver.find_element(by=By.XPATH, value=config.ITEM_NAME).text
     # signer_name = driver.find_element(by=By.XPATH, value=config.SIGNER_NAME).text
+    print(driver.find_element(by=By.XPATH, value=config.NO_RECORD).text)
+    if driver.find_element(by=By.XPATH, value=config.NO_RECORD).text == config.NO_RECORD_TEXT:
+        print("No Record Found")
+        return
     image = "有照片"
     try:
         driver.find_element(by=By.XPATH, value='//*[@id="image_data"]/div')
@@ -129,7 +143,11 @@ def for_main(q: multiprocessing.Queue):
             print(f"{multiprocessing.current_process().pid} 进程发现 {number}.json存在了")
         else:
             try:
-                begin(driver, number)
+                res = begin(driver, number)
+                if res == 1:
+                    driver.quit()
+                    for_main(q)
+                    return
                 get_information(driver, number)
                 get_another(driver)
             except Exception as e:
@@ -172,12 +190,12 @@ def multi_process_main():
     for number in numbers:
         q.put(number.strip())
     multiprocessing.Process(target=for_main, args=(q,)).start()
-    multiprocessing.Process(target=for_main, args=(q,)).start()
-    multiprocessing.Process(target=for_main, args=(q,)).start()
-    multiprocessing.Process(target=for_main, args=(q,)).start()
-    multiprocessing.Process(target=for_main, args=(q,)).start()
-    multiprocessing.Process(target=for_main, args=(q,)).start()
-    multiprocessing.Process(target=for_main, args=(q,)).start()
+    # multiprocessing.Process(target=for_main, args=(q,)).start()
+    # multiprocessing.Process(target=for_main, args=(q,)).start()
+    # multiprocessing.Process(target=for_main, args=(q,)).start()
+    # multiprocessing.Process(target=for_main, args=(q,)).start()
+    # multiprocessing.Process(target=for_main, args=(q,)).start()
+    # multiprocessing.Process(target=for_main, args=(q,)).start()
     # multiprocessing.Process(target=for_main, args=(q,)).start()
     # multiprocessing.Process(target=for_main, args=(q,)).start()
     # multiprocessing.Process(target=for_main, args=(q,)).start()

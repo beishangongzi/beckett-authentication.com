@@ -14,6 +14,9 @@ TRUE_NUMBER = '//*[@id="DivIdToPrint"]/div/div[2]/div/div/div[2]/h2/span'
 REFRESH_CAP = '#refreshcap'
 ALL_FIELDS = '//*[@id="DivIdToPrint"]/div/div[2]/div/div/div[2]/div[2]/table/tbody/tr/td[2]'
 ALL_FIELDS_NAME = '//*[@id="DivIdToPrint"]/div/div[2]/div/div/div[2]/div[2]/table/tbody/tr/td[1]'
+NO_RECORD = '//*[@id="DivIdToPrint"]/div/div[2]/div/div/div[2]'
+
+NO_RECORD_TEXT = "No Record Found"
 
 
 if __name__ == '__main__':
