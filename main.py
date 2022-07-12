@@ -130,9 +130,10 @@ def get_numbers():
         return f.readlines()
 
 
-def for_main(q: multiprocessing.Queue):
+def for_main(q: multiprocessing.Queue, driver=None):
     print("{%s} 进程启动。。。" % multiprocessing.current_process().pid)
-    driver = get_driver.get_driver()
+    if driver is None:
+        driver = get_driver.get_driver()
     driver.get("https://www.beckett-authentication.com/verify-certificate")
     while True:
         if q.empty():
@@ -145,16 +146,16 @@ def for_main(q: multiprocessing.Queue):
             try:
                 res = begin(driver, number)
                 if res == 1:
-                    driver.quit()
-                    for_main(q)
+                    driver.refresh()
+                    for_main(q, driver)
                     return
                 get_information(driver, number)
                 get_another(driver)
             except Exception as e:
                 print(e)
                 q.put(number)
-                driver.quit()
-                for_main(q)
+                driver.refresh()
+                for_main(q, driver)
                 return
     driver.quit()
 
