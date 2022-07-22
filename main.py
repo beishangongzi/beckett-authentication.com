@@ -12,7 +12,22 @@ import pandas as pd
 from ocr import Ocr
 
 
-
+def make_request(url, method, headers=None, timeout=None, data=None, cookies=None, ):
+    global response
+    i = 0
+    while i < 10:
+        try:
+            response = getattr(requests, method)(url=url, data=data, cookies=cookies, headers=headers, timeout=timeout)
+            break
+        except requests.exceptions.ConnectionError as e:
+            print(e)
+            i += 1
+            print(f"正在重试{i}次。。。。。。。。")
+            pass
+    if i == 10:
+        print("网络异常")
+        exit(1)
+    return response
 
 def init_cookie(cookies):
     cookie_olds = "__gads=ID=2c0c910414bcee33:T=1657506109:S=ALNI_MbBt8zizXkDzZPwxG1a6202dk0pLg; _hjSessionUser_396266=eyJpZCI6ImYxNmNlOTgyLWE2NmQtNWI3Yi1hMTI0LWMyN2MyYmI0MGU5OSIsImNyZWF0ZWQiOjE2NTc1MDYxMDk3MjUsImV4aXN0aW5nIjp0cnVlfQ==; _gid=GA1.2.967853733.1658320693; __gpi=UID=000007933f7833f3:T=1657506109:RT=1658320686:S=ALNI_MZFF-qVE-uJhcT6Q3EHud-RloQNoQ; _hjShownFeedbackMessage=true; ___rl__test__cookies=1658370502676; OUTFOX_SEARCH_USER_ID_NCOO=2093932773.2851992; _hjIncludedInSessionSample=0; _hjSession_396266=eyJpZCI6ImU3NDA5NWI1LTI1MjQtNGUxNS04ODUyLTY2NmIyYzhiNzkyYSIsImNyZWF0ZWQiOjE2NTgzODM3OTUxODAsImluU2FtcGxlIjpmYWxzZX0=; _hjIncludedInPageviewSample=1; _hjAbsoluteSessionInProgress=0; ci_session=qk3l39839c8eudpdmbvi4u4bq06godjf; _gat=1; _ga_K5EV5SPMCL=GS1.1.1658383793.5.1.1658384229.53; _ga=GA1.1.109171264.1657506109; AWSALBTG=xn/2l+yGSKgrHx8ILxQf/UhRJKePsl7SCCBy8kh4Pb2xDAkVcQtqCc7yl7SjId+fsxXcoLaWaOqwqzQomLAr1N+oAmS15po8FZ1FiMbQft1ze9Vov4wHkYKy9ASuygZVUuk3KlV0djuSZ2NfD1H6YmjnfTqVYr9v2T/ptfyEyAUXQ4TU42g=; AWSALBTGCORS=xn/2l+yGSKgrHx8ILxQf/UhRJKePsl7SCCBy8kh4Pb2xDAkVcQtqCc7yl7SjId+fsxXcoLaWaOqwqzQomLAr1N+oAmS15po8FZ1FiMbQft1ze9Vov4wHkYKy9ASuygZVUuk3KlV0djuSZ2NfD1H6YmjnfTqVYr9v2T/ptfyEyAUXQ4TU42g=; AWSALB=kMY1kjVmIPlPjlEbgkRrIIFQU+unkeHZUNw+znDEzlgHhEB2DwhcpNQ+I8LUjwm5uIdN5QlJDHejmmqdD+fUx9CGj/dp4ahnIBX6mVaewLMaiT1Hm+kpn4QmA4M2; AWSALBCORS=kMY1kjVmIPlPjlEbgkRrIIFQU+unkeHZUNw+znDEzlgHhEB2DwhcpNQ+I8LUjwm5uIdN5QlJDHejmmqdD+fUx9CGj/dp4ahnIBX6mVaewLMaiT1Hm+kpn4QmA4M2"
@@ -40,7 +55,7 @@ def process_cookie(cookies_str, cookies):
 
 def set_cookie(cookies):
     verify_certificate = "https://www.beckett-authentication.com/verify-certificate"
-    response = requests.get(verify_certificate, headers=headers, timeout=(5, 10))
+    response = make_request(verify_certificate, method="get", headers=headers, timeout=(5, 10))
     cookies_str = response.headers['Set-Cookie']
 
     process_cookie(cookies_str, cookies)
@@ -48,7 +63,7 @@ def set_cookie(cookies):
 
 def captcha_image(cookies):
     captchaImage = "https://www.beckett-authentication.com/bgsauthentication/captchaImage/?=0.2676218989787853"
-    response = requests.get(captchaImage, cookies=cookies, timeout=(5, 10))
+    response = make_request(captchaImage, method="get", cookies=cookies, timeout=(5, 10))
     contetnt = response.content
     ocr = Ocr()
     res = ocr.my_predict(image=contetnt)
@@ -63,7 +78,7 @@ def validateCaptcha(cookies, code, number):
         "captchaword": code.__str__(),
         "serial_num": number
     }
-    response = requests.post(url=validateCaptcha, data=data, cookies=cookies, headers=headers, timeout=(5, 10))
+    response = make_request(url=validateCaptcha, data=data, cookies=cookies, headers=headers, timeout=(5, 10), method="post")
     cookies_str = response.headers['Set-Cookie']
     process_cookie(cookies_str, cookies)
 
@@ -73,7 +88,7 @@ def listCertification(cookies, number):
     data = {
         "serial_num": number
     }
-    response = requests.post(url=listCertification, data=data, cookies=cookies, headers=headers, timeout=(5, 10))
+    response = make_request(method="post", url=listCertification, data=data, cookies=cookies, headers=headers, timeout=(5, 10))
     search_result = response.json()["search_result"]
     cert_image = response.json()["cert_image"]
     soup = BeautifulSoup(search_result, "html.parser")
@@ -103,9 +118,11 @@ def main(queue: Queue):
         listCertification(cookies, number)
         print(number)
 
+
 def get_numbers(file):
     df = pd.read_excel(file, names=["data"], header=None)["data"]
     return df.tolist()
+
 
 if __name__ == '__main__':
     headers = {
