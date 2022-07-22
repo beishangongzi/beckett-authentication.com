@@ -79,8 +79,13 @@ def validateCaptcha(cookies, code, number):
         "serial_num": number
     }
     response = make_request(url=validateCaptcha, data=data, cookies=cookies, headers=headers, timeout=(5, 10), method="post")
+    if response.json()["success"] == 0:
+        print("验证码错误")
+        return 0
     cookies_str = response.headers['Set-Cookie']
     process_cookie(cookies_str, cookies)
+    return 1
+
 
 
 def listCertification(cookies, number):
@@ -114,7 +119,10 @@ def main(queue: Queue):
         init_cookie(cookies)
         set_cookie(cookies)
         code = captcha_image(cookies)
-        validateCaptcha(cookies, code, number)
+        flag = validateCaptcha(cookies, code, number)
+        if flag == 0:
+            queue.put(number)
+            continue
         listCertification(cookies, number)
         print(number)
 
