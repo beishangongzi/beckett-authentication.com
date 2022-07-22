@@ -1,29 +1,32 @@
-# create by andy at 2022/4/1
-# reference:
-import json
 import os
 
-columns = ["true_number", "query_number", "Item Name", "Signer Name", "Comments"]
-fp = open("res.csv", "w")
-ls = os.listdir("data")
-for l in ls:
-    l = "data/" + l
-    with open(l, "r", encoding="utf-8") as f:
-        res_dict = json.load(f)
-        keys = res_dict.keys()
-        for k in keys:
-            if k not in columns and k != "image":
-                columns.append(k)
-        res = [res_dict['image']]
-        for column in columns:
-            try:
-                res.append(res_dict[column])
-            except KeyError as e:
-                res.append("")
-        s = ",".join(res)
-        fp.write(s)
-        fp.write("\n")
-fp.close()
+import pandas as pd
 
-if __name__ == '__main__':
-    pass
+from bs4 import BeautifulSoup
+
+
+def parser_file(file):
+    number = os.path.basename(file).split(".")[0].split("-")[0]
+    res = {"number": [number]}
+    if os.path.basename(file).__contains__("image"):
+        res.update({'image': 1})
+    with open(file, "r") as fp:
+        content = fp.read()
+        table = BeautifulSoup(content, "html.parser")
+        titles = table.find_all("td", {"class": "display_title"})
+        for title in titles:
+            sibling = title.find_next_sibling("td")
+            res.update({title.text.strip(): [sibling.text.strip()]})
+    return res
+
+
+data_dir = "data"
+df = pd.DataFrame()
+for file in os.listdir(data_dir):
+    file_path = os.path.join(data_dir, file)
+    res = parser_file(file_path)
+    res = pd.DataFrame(res, )
+    df = pd.concat([df, res])
+print(df)
+
+df.to_excel("res.xlsx")

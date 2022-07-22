@@ -1,220 +1,123 @@
-# create by andy at 2022/4/1
-# reference: 
+import io
+import os.path
+import threading
+from queue import Queue
 
-import csv
-import json
-import os
-import multiprocessing
+import requests
+import re
+from lxml import etree
+from bs4 import BeautifulSoup
+import pandas as pd
 
-import selenium.common.exceptions
-from selenium import webdriver
-from selenium.webdriver.chrome.service import Service
-import time
-import ddddocr
-from selenium.webdriver.common.by import By
-
-import config
-import get_driver
-import ocr
-import utils
+from ocr import Ocr
 
 
-def save_time_tower():
-    pass
 
 
-def begin(driver, number):
-    print(number)
-    serial_number = driver.find_element(by=By.CSS_SELECTOR, value="#serial_num")
-    serial_number.send_keys(number)
-    img = driver.find_element(by=By.CSS_SELECTOR, value="#register_capt")
-    captcha = driver.find_element(by=By.XPATH, value='//*[@id="captchaword"]')
-    i = 0
-    while i <= 1000:
-        i += 1
-        if i == 100:
-            res = input("重新识别了多次，但是还是错误，请输入正确的验证码\n")
-        else:
-            driver.find_element(by=By.CSS_SELECTOR, value='#refreshcap').click()
-            if i == 1:
-                time.sleep(0.1)  # 提高第一次运行的正确率，只能增加，不要降低
-            time.sleep(0.2)  # 重新识别二维码的时间， 点击刷新
-            try:
-                img.screenshot(os.path.join("captcha", f"{multiprocessing.current_process().pid}.png"))
-            except:
-                try:
-                    if driver.find_element(by=By.XPATH, value=config.NO_RECORD).text == config.NO_RECORD_TEXT:
-                        print("No Record Found")
-                        return 1
-                    time.sleep(1)  # 这个时间很玄学，但是并不是每次都会使用他，只有有时候会用到，不用动。
-                    print("验证是否跳转")
-                    driver.find_element(by=By.XPATH, value=config.TRUE_NUMBER)
-                    break
-                except:
-                    try:
-                        if driver.find_element(by=By.XPATH, value=config.NO_RECORD).text == config.NO_RECORD_TEXT:
-                            print("No Record Found")
-                            return 1
-                        time.sleep(0.5)  # 这个时间很玄学，但是并不是每次都会使用他，只有有时候会用到，不用动。
-                        print("验证是否跳转第二次")
-                        driver.find_element(by=By.XPATH, value=config.TRUE_NUMBER)
-                        break
-                    except:
-                        pass
-                    pass
-                exit("不能找到验证码的错误，程序停止")
-
-            res = ocr.ocr_local(os.path.join("captcha", f"{multiprocessing.current_process().pid}.png"))
-        captcha.clear()
-        captcha.send_keys(res)
-        verify = driver.find_element(by=By.CSS_SELECTOR, value="#search")
-        verify.click()
-        time.sleep(2)  # 识别成功后，进行跳转，可能需要两秒，自己调整， 这里是最影响时间的:
-
-        try:
-            try:
-                driver.find_element(by=By.XPATH, value=config.TRUE_NUMBER)
-                break
-            except:
-                time.sleep(0.5)
-                try:
-                    driver.find_element(by=By.XPATH, value=config.TRUE_NUMBER)
-                    break
-                except:
-                    time.sleep(0.5)
-                    driver.find_element(by=By.XPATH, value=config.TRUE_NUMBER)
-            break
-        except:
-            if driver.find_element(by=By.XPATH, value=config.NO_RECORD).text == config.NO_RECORD_TEXT:
-                print("No Record Found")
-                return 1
-            print("验证码错误，重新填写")
+def init_cookie(cookies):
+    cookie_olds = "__gads=ID=2c0c910414bcee33:T=1657506109:S=ALNI_MbBt8zizXkDzZPwxG1a6202dk0pLg; _hjSessionUser_396266=eyJpZCI6ImYxNmNlOTgyLWE2NmQtNWI3Yi1hMTI0LWMyN2MyYmI0MGU5OSIsImNyZWF0ZWQiOjE2NTc1MDYxMDk3MjUsImV4aXN0aW5nIjp0cnVlfQ==; _gid=GA1.2.967853733.1658320693; __gpi=UID=000007933f7833f3:T=1657506109:RT=1658320686:S=ALNI_MZFF-qVE-uJhcT6Q3EHud-RloQNoQ; _hjShownFeedbackMessage=true; ___rl__test__cookies=1658370502676; OUTFOX_SEARCH_USER_ID_NCOO=2093932773.2851992; _hjIncludedInSessionSample=0; _hjSession_396266=eyJpZCI6ImU3NDA5NWI1LTI1MjQtNGUxNS04ODUyLTY2NmIyYzhiNzkyYSIsImNyZWF0ZWQiOjE2NTgzODM3OTUxODAsImluU2FtcGxlIjpmYWxzZX0=; _hjIncludedInPageviewSample=1; _hjAbsoluteSessionInProgress=0; ci_session=qk3l39839c8eudpdmbvi4u4bq06godjf; _gat=1; _ga_K5EV5SPMCL=GS1.1.1658383793.5.1.1658384229.53; _ga=GA1.1.109171264.1657506109; AWSALBTG=xn/2l+yGSKgrHx8ILxQf/UhRJKePsl7SCCBy8kh4Pb2xDAkVcQtqCc7yl7SjId+fsxXcoLaWaOqwqzQomLAr1N+oAmS15po8FZ1FiMbQft1ze9Vov4wHkYKy9ASuygZVUuk3KlV0djuSZ2NfD1H6YmjnfTqVYr9v2T/ptfyEyAUXQ4TU42g=; AWSALBTGCORS=xn/2l+yGSKgrHx8ILxQf/UhRJKePsl7SCCBy8kh4Pb2xDAkVcQtqCc7yl7SjId+fsxXcoLaWaOqwqzQomLAr1N+oAmS15po8FZ1FiMbQft1ze9Vov4wHkYKy9ASuygZVUuk3KlV0djuSZ2NfD1H6YmjnfTqVYr9v2T/ptfyEyAUXQ4TU42g=; AWSALB=kMY1kjVmIPlPjlEbgkRrIIFQU+unkeHZUNw+znDEzlgHhEB2DwhcpNQ+I8LUjwm5uIdN5QlJDHejmmqdD+fUx9CGj/dp4ahnIBX6mVaewLMaiT1Hm+kpn4QmA4M2; AWSALBCORS=kMY1kjVmIPlPjlEbgkRrIIFQU+unkeHZUNw+znDEzlgHhEB2DwhcpNQ+I8LUjwm5uIdN5QlJDHejmmqdD+fUx9CGj/dp4ahnIBX6mVaewLMaiT1Hm+kpn4QmA4M2"
+    cookie_olds = cookie_olds.split(";")
+    for c in cookie_olds:
+        c_s = c.split(",")
+        for cookie_old in c_s:
+            name, value = re.match("(\S*?)=(.*)", cookie_old.strip()).groups()
+            cookies.update({name.strip(): value.strip()})
 
 
-@utils.logit()
-def get_another(driver: webdriver.Firefox):
-    another = driver.find_element(by=By.XPATH, value=config.ANOTHER)
-    another.click()
+def process_cookie(cookies_str, cookies):
+    element = cookies_str.split(";")
+    for c in element:
+        c_s = c.split(",")
+        for cookie in c_s:
+            if len(cookie) > 30:
+                cookie = cookie.strip()
+
+                name, value = re.match("(\S*?)=(.*)", cookie.strip()).groups()
+                if name == "Path":
+                    continue
+                cookies.update({name.strip(): value.strip()})
 
 
-@utils.logit()
-def get_information(driver: webdriver.Firefox, query_number):
-    true_number = driver.find_element(by=By.XPATH, value=config.TRUE_NUMBER).text.split(":")[-1].strip()
-    # item_name = driver.find_element(by=By.XPATH, value=config.ITEM_NAME).text
-    # signer_name = driver.find_element(by=By.XPATH, value=config.SIGNER_NAME).text
-    print(driver.find_element(by=By.XPATH, value=config.NO_RECORD).text)
-    if driver.find_element(by=By.XPATH, value=config.NO_RECORD).text == config.NO_RECORD_TEXT:
-        print("No Record Found")
-        return
-    image = "有照片"
-    try:
-        driver.find_element(by=By.XPATH, value='//*[@id="image_data"]/div')
-    except:
-        image = "没照片"
-    fields = driver.find_elements(by=By.XPATH, value=config.ALL_FIELDS)
-    names = driver.find_elements(by=By.XPATH, value=config.ALL_FIELDS_NAME)
-    res = {}
-    for i in range(len(names)):
-        name_text = names[i].text
-        field_text = fields[i].text
-        res.update({name_text: field_text})
-    res.update({"image": image, "true_number": true_number, "query_number": query_number})
-    with open("data/" + query_number + ".json", "w", encoding="utf-8") as f:
-        json.dump(res, f)
-    # return query_number, true_number, item_name, signer_name
-    print(res)
+def set_cookie(cookies):
+    verify_certificate = "https://www.beckett-authentication.com/verify-certificate"
+    response = requests.get(verify_certificate, headers=headers, timeout=(5, 10))
+    cookies_str = response.headers['Set-Cookie']
+
+    process_cookie(cookies_str, cookies)
+
+
+def captcha_image(cookies):
+    captchaImage = "https://www.beckett-authentication.com/bgsauthentication/captchaImage/?=0.2676218989787853"
+    response = requests.get(captchaImage, cookies=cookies, timeout=(5, 10))
+    contetnt = response.content
+    ocr = Ocr()
+    res = ocr.my_predict(image=contetnt)
+    cookies_str = response.headers['Set-Cookie']
+    process_cookie(cookies_str, cookies)
     return res
 
-def get_numbers():
-    with open("numbers.csv") as f:
-        return f.readlines()
+
+def validateCaptcha(cookies, code, number):
+    validateCaptcha = "https://www.beckett-authentication.com/bgsauthentication/validateCaptcha"
+    data = {
+        "captchaword": code.__str__(),
+        "serial_num": number
+    }
+    response = requests.post(url=validateCaptcha, data=data, cookies=cookies, headers=headers, timeout=(5, 10))
+    cookies_str = response.headers['Set-Cookie']
+    process_cookie(cookies_str, cookies)
 
 
-def for_main(q: multiprocessing.Queue, driver=None):
-    print("{%s} 进程启动。。。" % multiprocessing.current_process().pid)
-    if driver is None:
-        driver = get_driver.get_driver()
-    driver.get("https://www.beckett-authentication.com/verify-certificate")
-    while True:
-        if q.empty():
-            print("{%s} 进程结束了。。。" % multiprocessing.current_process().pid)
-            break
-        number = q.get()
-        if os.path.exists(f"data/{number}.json"):
-            print(f"{multiprocessing.current_process().pid} 进程发现 {number}.json存在了")
-        else:
-            try:
-                res = begin(driver, number)
-                if res == 1:
-                    driver.refresh()
-                    for_main(q, driver)
-                    return
-                get_information(driver, number)
-                get_another(driver)
-            except Exception as e:
-                print(e)
-                q.put(number)
-                driver.refresh()
-                for_main(q, driver)
-                return
-    driver.quit()
-
-def main():
-    driver = get_driver.get_driver()
-    driver.get("https://www.beckett-authentication.com/verify-certificate")
-    numbers = get_numbers()
-    save_file = "res.csv"
-    with open(save_file, "w") as f:
-        for number in numbers:
-            number = number.strip()
-            if os.path.exists(f"data/{number}.json"):
-                print(f"{number} 已经下载了 ")
-                continue
-            try:
-                begin(driver, number)
-            except:
-                driver.quit()
-                main()
-            information = get_information(driver, number)
-            # f.write(",".join(information))
-            # f.write("\n")
-            get_another(driver)
+def listCertification(cookies, number):
+    listCertification = "https://www.beckett-authentication.com/bgsauthentication/listCertification"
+    data = {
+        "serial_num": number
+    }
+    response = requests.post(url=listCertification, data=data, cookies=cookies, headers=headers, timeout=(5, 10))
+    search_result = response.json()["search_result"]
+    cert_image = response.json()["cert_image"]
+    soup = BeautifulSoup(search_result, "html.parser")
+    table = soup.table
+    if len(cert_image) == 0:
+        name = "data/" + number + ".lxml"
+    else:
+        name = "data/" + number + "-image-" + ".lxml"
+    with open(name, "w") as fp:
+        fp.write(table.__str__())
 
 
-def multi_process_main():
-    if not os.path.exists("captcha"):
-        os.mkdir("captcha")
-    if not os.path.exists("data"):
-        os.mkdir("data")
-    q = multiprocessing.Queue()
-    numbers = get_numbers()
-    for number in numbers:
-        q.put(number.strip())
-    multiprocessing.Process(target=for_main, args=(q,)).start()
-    # multiprocessing.Process(target=for_main, args=(q,)).start()
-    # multiprocessing.Process(target=for_main, args=(q,)).start()
-    # multiprocessing.Process(target=for_main, args=(q,)).start()
-    # multiprocessing.Process(target=for_main, args=(q,)).start()
-    # multiprocessing.Process(target=for_main, args=(q,)).start()
-    # multiprocessing.Process(target=for_main, args=(q,)).start()
-    # multiprocessing.Process(target=for_main, args=(q,)).start()
-    # multiprocessing.Process(target=for_main, args=(q,)).start()
-    # multiprocessing.Process(target=for_main, args=(q,)).start()
-    # multiprocessing.Process(target=for_main, args=(q,)).start()
-    # multiprocessing.Process(target=for_main, args=(q,)).start()
-    # multiprocessing.Process(target=for_main, args=(q,)).start()
-    # multiprocessing.Process(target=for_main, args=(q,)).start()
+def get_name_without_ext(path):
+    basename = os.path.basename(path).split(".")[0].split("-")[0]
+    return basename
 
-    
-    
+
+def main(queue: Queue):
+    cookies = {}
+    print(threading.current_thread(), "start.................")
+    while not queue.empty():
+        number = queue.get()
+        init_cookie(cookies)
+        set_cookie(cookies)
+        code = captcha_image(cookies)
+        validateCaptcha(cookies, code, number)
+        listCertification(cookies, number)
+        print(number)
+
+def get_numbers(file):
+    df = pd.read_excel(file, names=["data"], header=None)["data"]
+    return df.tolist()
 
 if __name__ == '__main__':
-    # main()
-    start = time.time()
-    p = multiprocessing.Process(target=multi_process_main)
-    p.start()
-    p.join()
-    end = time.time()
-    print(end-start)
-    print("每一秒有{}".format(150/(end-start)))
-    print("一个需要{}".format((end-start)/150))
+    headers = {
+        "user-agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/103.0.0.0 Safari/537.36"}
+    numbers = get_numbers("numbers.xlsx")
+    numbers_exists = []
+    for file in os.listdir("data"):
+        name = get_name_without_ext(file)
+        numbers_exists.append(name)
+    numbers = list(set(numbers).difference(set(numbers_exists)))
+    queue_numbers = Queue()
+    for number in numbers:
+        queue_numbers.put(number)
+    for i in range(10):
+        threading.Thread(target=main, args=(queue_numbers,)).start()
