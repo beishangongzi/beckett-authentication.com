@@ -24,6 +24,11 @@ def make_request(url, method, headers=None, timeout=None, data=None, cookies=Non
             i += 1
             print(f"正在重试{i}次。。。。。。。。")
             pass
+        except requests.exceptions.ReadTimeout as e:
+            print(e)
+            i += 1
+            print(f"正在重试{i}次。。。。。。。。")
+            pass
     if i == 10:
         print("网络异常")
         exit(1)
@@ -128,7 +133,7 @@ def main(queue: Queue):
 
 
 def get_numbers(file):
-    df = pd.read_excel(file, names=["data"], header=None)["data"]
+    df = pd.read_excel(file, names=["data"], header=None)["data"].astype(str)
     return df.tolist()
 
 
@@ -137,6 +142,7 @@ if __name__ == '__main__':
         "user-agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/103.0.0.0 Safari/537.36"}
     numbers = get_numbers("numbers.xlsx")
     numbers_exists = []
+    os.makedirs("data", exist_ok=True)
     for file in os.listdir("data"):
         name = get_name_without_ext(file)
         numbers_exists.append(name)
