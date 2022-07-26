@@ -17,7 +17,7 @@ def make_request(url, method, headers=None, timeout=None, data=None, cookies=Non
     i = 0
     while i < 10:
         try:
-            response = getattr(requests, method)(url=url, data=data, cookies=cookies, headers=headers, timeout=timeout)
+            response = getattr(requests, method)(url=url, data=data, cookies=cookies, headers=headers)
             break
         except requests.exceptions.ConnectionError as e:
             print(e)
@@ -150,5 +150,5 @@ if __name__ == '__main__':
     queue_numbers = Queue()
     for number in numbers:
         queue_numbers.put(number)
-    for i in range(10):
+    for i in range(16):
         threading.Thread(target=main, args=(queue_numbers,)).start()
